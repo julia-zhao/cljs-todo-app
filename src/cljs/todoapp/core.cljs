@@ -31,7 +31,50 @@
      [:ul
       [:li [:a {:href (path-for :items)} "tasks for today"]]]]))
 
-(let [num-tasks (atom 1) task-list (atom [])]
+(rf/reg-event-db
+ :init-db
+ (fn [db [_]]
+   (assoc db :task-list [] :num-tasks 1)
+   )
+ )
+
+;toggles the :finished state from true <-> false
+(rf/reg-event-db
+  :toggle
+  (fn [db [_ index]]
+    (update-in db [:task-list index :finished] not)))
+
+;adds new task into :task-list
+(rf/reg-event-db
+ :add-task
+ (fn [db [_ name]]
+   ;(update db :task-list dec)
+   (assoc db :task-list (conj (get db :task-list) (assoc {} :task name :finished false))))
+)
+
+
+;increase the number of tasks by 1
+(rf/reg-event-db
+ :inc-tasks
+ (fn [db]
+   (update db :num-tasks inc)))
+
+(defn query-tasks [db]
+  (get db :task-list)
+  )
+
+(defn query-num [db]
+  (get db :num-tasks))
+
+(rf/reg-sub
+ :get-tasklist
+ query-tasks)
+
+(rf/reg-sub
+ :get-numtasks
+ query-num
+)
+
 ;; a form for the user to submit
   (let [task-name (atom "")]
     (defn add-todo []
@@ -44,45 +87,34 @@
        [:div
         [:input {:type "button"
                  :value "+ add a new task"
-                 :on-click (fn []
-                             (if (not (= @task-name ""))
+                 :on-click #(if (not (= @task-name ""))
                                (do
-                                 (swap! task-list #(conj @task-list (assoc {} :task @task-name :finished false)))
-                                 (swap! num-tasks inc)
+                                 (rf/dispatch [:add-task @task-name])
+                                 (rf/dispatch [:inc-tasks])
                                  (reset! task-name ""))
-                               ()))}]]]))
-  (defn delete-chkbx []
-    [:div
-     [:input {:type "button"
-              :value "delete all checked boxes"
-              :on-click (fn []
-                          ;(js/alert (filter #(false? (get-in @task-list [% :finished])) (range 1 @num-tasks)))
-                          (js/alert (filter #(false? (get-in % [:finished])) @task-list))
-                          (reset! task-list (filter #(false? (get-in % [:finished])) @task-list))
-                          (reset! num-tasks (count @task-list))
-                          (js/alert @num-tasks)
-                          (js/alert (get-in @task-list [0 :task]))
-                          ;(js/alert (map #(get % [:finished]) @task-list))
-                          )}]])
-  
-  ;;turns false <-> true
-  (defn toggle [index]
-    (swap! task-list update-in [index :finished] not))
+                               ())}]]]))
 
-  (defn todo-item [item-id {:keys [task finished]}]
+  (defn todo-chkbx [item-id {:keys [task finished]}]
     [:ul
      [:input {:type "checkbox"
               :checked finished
-              :on-change #(toggle item-id)}]
+              :on-change #(rf/dispatch [:toggle item-id])}]
      [:a {:href (path-for :item {:item-id item-id})} task]])
 
-  (defn items-page []
-    [:div
-     [:h1 "You have " (dec @num-tasks) " tasks."]
-     [:ul (doall (for [[item-id task] (map-indexed list @task-list)]
-                   ^{:key item-id}
-                   [todo-item item-id task]))]
-     [add-todo]]))
+  (let [tasks (rf/subscribe [:get-tasklist])
+        num-tasks (rf/subscribe [:get-numtasks])]
+    
+    (defn items-page []
+      [:div
+       [:div
+        [:h1 "You have " (dec @num-tasks) " tasks."]
+        [:ul (doall (for [[item-id task] (map-indexed list @tasks)]
+                      ^{:key item-id}
+                      [todo-chkbx item-id task]))]
+        [add-todo]]
+       [:div 
+        [:input {:type "text"
+                 :value @num-tasks}]]]))
 
 
 (defn item-page []
@@ -127,7 +159,8 @@
 ;; Initialize app
 
 (defn mount-root []
-  (rdom/render [current-page] (.getElementById js/document "app")))
+  (rdom/render [current-page] (.getElementById js/document "app"))
+  (rf/dispatch [:init-db]))
 
 (defn init! []
   (clerk/initialize!)
