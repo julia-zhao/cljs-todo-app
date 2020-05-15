@@ -31,6 +31,7 @@
      [:ul
       [:li [:a {:href (path-for :items)} "tasks for today"]]]]))
 
+;initializes the app-db with the following values
 (rf/reg-event-db
  :init-db
  (fn [db [_]]
@@ -48,16 +49,29 @@
 (rf/reg-event-db
  :add-task
  (fn [db [_ name]]
-   ;(update db :task-list dec)
-   (assoc db :task-list (conj (get db :task-list) (assoc {} :task name :finished false))))
-)
-
+   (update db :task-list #(conj % (assoc {} :task name :finished false)))))
 
 ;increase the number of tasks by 1
 (rf/reg-event-db
  :inc-tasks
  (fn [db]
    (update db :num-tasks inc)))
+
+;deletes all completed tasks from db
+(rf/reg-event-fx
+ :delete-completed
+ (fn [{:keys [db]}]
+   {:db (->> (get db :task-list)
+         (filter #(false? (get % :finished)))
+         (assoc db :task-list))
+    :dispatch [:update-num-tasks]}
+   ))
+
+;updates num tasks after all completed tasks have been cleared
+(rf/reg-event-db
+ :update-num-tasks
+ (fn [db]
+   (assoc db :num-tasks (inc (count (get db :task-list))))))
 
 (defn query-tasks [db]
   (get db :task-list)
@@ -98,24 +112,27 @@
     [:ul
      [:input {:type "checkbox"
               :checked finished
-              :on-change #(rf/dispatch [:toggle item-id])}]
+              :on-click #(rf/dispatch [:toggle item-id])}]
      [:a {:href (path-for :item {:item-id item-id})} task]])
+  
+  (defn delete-completed []
+    [:input {:type "button"
+             :value "clear completed"
+             :on-click #(rf/dispatch [:delete-completed])}])
 
   (let [tasks (rf/subscribe [:get-tasklist])
         num-tasks (rf/subscribe [:get-numtasks])]
     
     (defn items-page []
-      [:div
-       [:div
-        [:h1 "You have " (dec @num-tasks) " tasks."]
-        [:ul (doall (for [[item-id task] (map-indexed list @tasks)]
-                      ^{:key item-id}
-                      [todo-chkbx item-id task]))]
-        [add-todo]]
-       [:div 
-        [:input {:type "text"
-                 :value @num-tasks}]]]))
-
+    [:div
+     [:div
+      [:h1 "You have " (dec @num-tasks) " tasks."]]
+     [:div
+      [:ul (doall (for [[item-id task] (map-indexed list @tasks)]
+                    ^{:key item-id}
+                    [todo-chkbx item-id task]))]
+      [add-todo]
+      [delete-completed]]]))
 
 (defn item-page []
   (fn []
@@ -125,14 +142,12 @@
        [:h1 (str "TASK " item)]
        [:p [:a {:href (path-for :items)} "Back to the list of tasks"]]])))
 
-
 (defn about-page []
   (fn [] [:span.main
           [:h1 "About TODO APP"]]))
 
 ;; -------------------------
 ;; Translate routes -> page components
-
 (defn page-for [route]
   (case route
     :index #'home-page
@@ -142,7 +157,6 @@
 
 ;; -------------------------
 ;; Page mounting component
-
 (defn current-page []
   (fn []
     (let [page (:current-page (session/get :route))]

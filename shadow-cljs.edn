@@ -1,0 +1,11 @@
+{:lein         true
+ :source-paths ["src"]
+ :builds       {:app {:target     :browser
+                      :output-dir "resources/public/js"
+                      :asset-path "/js"
+                      :modules    {:app {:entries [todoapp.core]}}
+                      :devtools   {:after-load todoapp.core/mount-root}}}
+ :dev-http     {3000 {:root    "resources/public"
+                      :handler todoapp.handler/app}}}
+{:dependencies
+ [[cider/cider-nrepl "0.21.1"]]}

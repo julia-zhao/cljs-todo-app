@@ -1,0 +1,1 @@
+web: java -Dclojure.main.report=stderr -cp target/uberjar/todo-backend.jar clojure.main -m todo-backend.core
