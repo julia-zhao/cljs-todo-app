@@ -5,7 +5,8 @@
 
   :dependencies [[cheshire "5.10.0"]
                  [clojure.java-time "0.3.2"]
-                 [conman "0.8.8"]
+                 [cljs-ajax "0.8.0"]
+                 ;[day8.re-frame/http-fx "v0.2.0"]
                  [cprop "0.1.16"]
                  [expound "0.8.4"]
                  [funcool/struct "1.4.0"]
@@ -29,6 +30,9 @@
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.8.0"]
                  [ring/ring-defaults "0.3.2"]
+                 ;[seancorfield/next.jdbc "1.0.424"]
+                 [conman "0.8.8"]
+                 [ring-cors "0.1.13"]
                  [selmer "1.12.23"]]
 
   :min-lein-version "2.0.0"

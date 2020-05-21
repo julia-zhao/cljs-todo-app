@@ -6,6 +6,8 @@
 
   :dependencies [[cider/cider-nrepl "0.21.1"]
                  [re-frame "0.12.0"]
+                 [day8.re-frame/http-fx "v0.2.0"]
+                 ;[cljs-ajax "0.8.0"]
                  ;[thheller/shadow-cljs "2.9.0"]
                  ;[reagent "0.8.1"]
                  [org.clojure/clojure "1.10.1"]
