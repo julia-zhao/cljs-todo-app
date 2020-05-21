@@ -1,5 +1,7 @@
 (ns todoapp.core
   (:require
+   [ajax.core :as ajax];to create a connection to SQL database
+   [day8.re-frame.http-fx] 
    [re-frame.core :as rf]
    [reagent.core :as reagent :refer [atom]]
    [reagent.dom :as rdom]
@@ -32,24 +34,77 @@
       [:li [:a {:href (path-for :items)} "tasks for today"]]]]))
 
 ;initializes the app-db with the following values
+;; (rf/reg-event-db
+;;  :init-db
+;;  (fn [db [_]]
+;;    (assoc db :task-list [] :num-tasks 1)))
+
 (rf/reg-event-db
  :init-db
- (fn [db [_]]
-   (assoc db :task-list [] :num-tasks 1)
-   )
- )
+ (fn [{:keys [db]} [_]]
+   :db (assoc db :task-list [] :num-tasks 1)))
 
 ;toggles the :finished state from true <-> false
 (rf/reg-event-db
-  :toggle
-  (fn [db [_ index]]
-    (update-in db [:task-list index :finished] not)))
+ :toggle
+ (fn [db [_ index]]
+   (update-in db [:task-list index :finished] not)))
 
 ;adds new task into :task-list
 (rf/reg-event-db
- :add-task
+ :update-db-tasklist
  (fn [db [_ name]]
    (update db :task-list #(conj % (assoc {} :task name :finished false)))))
+
+(rf/reg-event-fx
+ :add-task
+ (fn
+   [db [_ name]]
+  ;;  [{db :db} _]
+   ;;return a map of side effects
+   {:http-xhrio {:method           :post
+                 :uri              "http://localhost:3000/api/todos"
+                 :params           {:item name
+                                    :completed false}
+                 :format           (ajax/json-request-format)
+                 :response-format  (ajax/json-response-format {:keywords? true})
+                 :on-success       [:update-db-tasklist name]
+                 :on-failure       [:failure-post]}
+    }))
+
+(rf/reg-event-fx
+ :get-tasks
+ (fn
+   [{:keys [db]} _]
+   ;;return a map of side effects
+   {
+    :http-xhrio {:method           :get
+                 :uri              "http://localhost:3000/api/todos"
+                 :format           (ajax/json-request-format)
+                 :response-format  (ajax/json-response-format {:keywords? true})
+                 :on-success       [:success-get]
+                 :on-failure       [:failure-get]}
+    }))
+
+(rf/reg-event-db
+ :failure-post
+ (fn
+   [db [_ response]]
+   (js/alert response)
+   (js/alert "failure")))
+
+(rf/reg-event-db
+ :success-get
+ (fn
+   [db [_ response]]
+   (assoc db :task-list response)))
+
+(rf/reg-event-db
+ :failure-get
+ (fn
+   [db [_ response]]
+   (js/alert response)
+   (js/alert "failure")))
 
 ;increase the number of tasks by 1
 (rf/reg-event-db
@@ -62,10 +117,9 @@
  :delete-completed
  (fn [{:keys [db]}]
    {:db (->> (get db :task-list)
-         (filter #(false? (get % :finished)))
-         (assoc db :task-list))
-    :dispatch [:update-num-tasks]}
-   ))
+             (filter #(false? (get % :finished)))
+             (assoc db :task-list))
+    :dispatch [:update-num-tasks]}))
 
 ;updates num tasks after all completed tasks have been cleared
 (rf/reg-event-db
@@ -74,8 +128,7 @@
    (assoc db :num-tasks (inc (count (get db :task-list))))))
 
 (defn query-tasks [db]
-  (get db :task-list)
-  )
+  (get db :task-list))
 
 (defn query-num [db]
   (get db :num-tasks))
@@ -86,44 +139,43 @@
 
 (rf/reg-sub
  :get-numtasks
- query-num
-)
+ query-num)
 
 ;; a form for the user to submit
-  (let [task-name (atom "")]
-    (defn add-todo []
-      [:div
-       [:div
-        [:input {:type "text"
-                 :placeholder "Please enter details of the task to insert."
-                 :value @task-name
-                 :on-change #(reset! task-name (-> % .-target .-value))}]]
-       [:div
-        [:input {:type "button"
-                 :value "+ add a new task"
-                 :on-click #(if (not (= @task-name ""))
-                               (do
-                                 (rf/dispatch [:add-task @task-name])
-                                 (rf/dispatch [:inc-tasks])
-                                 (reset! task-name ""))
-                               ())}]]]))
+(let [task-name (atom "")]
+  (defn add-todo []
+    [:div
+     [:div
+      [:input {:type "text"
+               :placeholder "Please enter details of the task to insert."
+               :value @task-name
+               :on-change #(reset! task-name (-> % .-target .-value))}]]
+     [:div
+      [:input {:type "button"
+               :value "+ add a new task"
+               :on-click #(if (not (= @task-name ""))
+                            (do
+                              (rf/dispatch [:add-task @task-name])
+                              (rf/dispatch [:inc-tasks])
+                              (reset! task-name ""))
+                            ())}]]]))
 
-  (defn todo-chkbx [item-id {:keys [task finished]}]
-    [:ul
-     [:input {:type "checkbox"
-              :checked finished
-              :on-click #(rf/dispatch [:toggle item-id])}]
-     [:a {:href (path-for :item {:item-id item-id})} task]])
-  
-  (defn delete-completed []
-    [:input {:type "button"
-             :value "clear completed"
-             :on-click #(rf/dispatch [:delete-completed])}])
+(defn todo-chkbx [item-id {:keys [task finished]}]
+  [:ul
+   [:input {:type "checkbox"
+            :checked finished
+            :on-click #(rf/dispatch [:toggle item-id])}]
+   [:a {:href (path-for :item {:item-id item-id})} task]])
 
-  (let [tasks (rf/subscribe [:get-tasklist])
-        num-tasks (rf/subscribe [:get-numtasks])]
-    
-    (defn items-page []
+(defn delete-completed []
+  [:input {:type "button"
+           :value "clear completed" 
+           :on-click #(rf/dispatch [:delete-completed])}])
+
+(let [tasks (rf/subscribe [:get-tasklist])
+      num-tasks (rf/subscribe [:get-numtasks])]
+
+  (defn items-page []
     [:div
      [:div
       [:h1 "You have " (dec @num-tasks) " tasks."]]

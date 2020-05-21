@@ -52,19 +52,24 @@
     {:get (constantly (ok {:message "pong"}))}]
 
    ["/todos"
-    {:get {:handler (fn [_]
+    ["" {:get {:handler (fn [_]
+                      (prn (db/get-todos))
                       {:status 200
-                       :body {:list (db/get-todos)}})}
+                       :body (db/get-todos)
+                       })}
      :post {:parameters {:body {:item string? :completed boolean?}}
             :handler (fn [{{{:keys [item completed]} :body} :parameters}]
                        (db/create-todo! {:item item :completed completed})
-                       {:status 200})}}
+                       {:status 200
+                        :headers {"content-type" "application/json"}
+                        :body "\"json\""})}}]
     ["/:id"
      {:get {:parameters {:path {:id int?}}
             :handler (fn [{{{:keys [id]} :path} :parameters}]
                        {:status 200
                         :body (db/get-todo {:id id})})
-            }}]]
+            }}]
+    ]
    
    ["/math"
     {:swagger {:tags ["math"]}}
