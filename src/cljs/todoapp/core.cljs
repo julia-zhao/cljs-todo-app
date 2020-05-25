@@ -1,7 +1,7 @@
 (ns todoapp.core
   (:require
    [ajax.core :as ajax];to create a connection to SQL database
-   [day8.re-frame.http-fx] 
+   [day8.re-frame.http-fx]
    [re-frame.core :as rf]
    [reagent.core :as reagent :refer [atom]]
    [reagent.dom :as rdom]
@@ -33,34 +33,51 @@
      [:ul
       [:li [:a {:href (path-for :items)} "tasks for today"]]]]))
 
-;initializes the app-db with the following values
-;; (rf/reg-event-db
-;;  :init-db
-;;  (fn [db [_]]
-;;    (assoc db :task-list [] :num-tasks 1)))
-
 (rf/reg-event-db
  :init-db
  (fn [{:keys [db]} [_]]
-   :db (assoc db :task-list [] :num-tasks 1)))
+   :db (assoc db :task-list (rf/dispatch [:get-tasks]) :num-tasks 1)))
 
-;toggles the :finished state from true <-> false
-(rf/reg-event-db
+(rf/reg-event-fx
+ :delete-completed
+ (fn [db [_]]
+   {:http-xhrio {:method           :delete
+                 :uri              "http://localhost:3000/api/todos/all"
+                 :format           (ajax/json-request-format)
+                ;;  :response-format  (ajax/json-response-format {:keywords? true})
+                 :response-format  (ajax/raw-response-format)
+                 :on-success       [:refresh-db]
+                 :on-failure       [:generic-failure]}}))
+
+(rf/reg-event-fx
+ :delete-one
+ (fn [db [_ id]]
+   {:http-xhrio {:method           :delete
+                 :uri              "http://localhost:3000/api/todos"
+                 :params           {:id id}
+                 :format           (ajax/json-request-format)
+                ;;  :response-format  (ajax/json-response-format {:keywords? true})
+                 :response-format  (ajax/raw-response-format)
+                 :on-success       [:refresh-db]
+                 :on-failure       [:generic-failure]}}))
+
+(rf/reg-event-fx
  :toggle
- (fn [db [_ index]]
-   (update-in db [:task-list index :finished] not)))
-
-;adds new task into :task-list
-(rf/reg-event-db
- :update-db-tasklist
- (fn [db [_ name]]
-   (update db :task-list #(conj % (assoc {} :task name :finished false)))))
+ (fn [db [_ id completed]]
+   {:http-xhrio {:method           :put
+                 :uri              "http://localhost:3000/api/todos"
+                 :params           {:id id
+                                    :completed completed}
+                 :format           (ajax/json-request-format)
+                ;;  :response-format  (ajax/json-response-format {:keywords? true})
+                 :response-format  (ajax/raw-response-format)
+                 :on-success       [:refresh-db]
+                 :on-failure       [:generic-failure]}}))
 
 (rf/reg-event-fx
  :add-task
  (fn
    [db [_ name]]
-  ;;  [{db :db} _]
    ;;return a map of side effects
    {:http-xhrio {:method           :post
                  :uri              "http://localhost:3000/api/todos"
@@ -68,39 +85,37 @@
                                     :completed false}
                  :format           (ajax/json-request-format)
                  :response-format  (ajax/json-response-format {:keywords? true})
-                 :on-success       [:update-db-tasklist name]
-                 :on-failure       [:failure-post]}
-    }))
+                 :on-success       [:refresh-db]
+                 :on-failure       [:generic-failure]}}))
 
 (rf/reg-event-fx
  :get-tasks
  (fn
    [{:keys [db]} _]
    ;;return a map of side effects
-   {
-    :http-xhrio {:method           :get
+   {:http-xhrio {:method           :get
                  :uri              "http://localhost:3000/api/todos"
                  :format           (ajax/json-request-format)
                  :response-format  (ajax/json-response-format {:keywords? true})
                  :on-success       [:success-get]
-                 :on-failure       [:failure-get]}
-    }))
+                 :on-failure       [:generic-failure]}}))
 
+;; replaces rf's local db with the data in the sql db
 (rf/reg-event-db
- :failure-post
+ :refresh-db
  (fn
-   [db [_ response]]
-   (js/alert response)
-   (js/alert "failure")))
+   [db [_]]
+   :db (assoc db :task-list (rf/dispatch [:get-tasks]))))
 
 (rf/reg-event-db
  :success-get
  (fn
    [db [_ response]]
+  ;;  (assoc db :task-list (into [] (map #(dissoc % :id) response)))
    (assoc db :task-list response)))
 
 (rf/reg-event-db
- :failure-get
+ :generic-failure
  (fn
    [db [_ response]]
    (js/alert response)
@@ -113,13 +128,13 @@
    (update db :num-tasks inc)))
 
 ;deletes all completed tasks from db
-(rf/reg-event-fx
- :delete-completed
- (fn [{:keys [db]}]
-   {:db (->> (get db :task-list)
-             (filter #(false? (get % :finished)))
-             (assoc db :task-list))
-    :dispatch [:update-num-tasks]}))
+;; (rf/reg-event-fx
+;;  :delete-completed
+;;  (fn [{:keys [db]}]
+;;    {:db (->> (get db :task-list)
+;;              (filter #(false? (get % :completed)))
+;;              (assoc db :task-list))
+;;     :dispatch [:update-num-tasks]}))
 
 ;updates num tasks after all completed tasks have been cleared
 (rf/reg-event-db
@@ -160,17 +175,26 @@
                               (reset! task-name ""))
                             ())}]]]))
 
-(defn todo-chkbx [item-id {:keys [task finished]}]
+(defn todo-chkbx [item-id {:keys [id item completed]}]
   [:ul
    [:input {:type "checkbox"
-            :checked finished
-            :on-click #(rf/dispatch [:toggle item-id])}]
-   [:a {:href (path-for :item {:item-id item-id})} task]])
+            :checked completed
+            :on-change #(rf/dispatch [:toggle id (not completed)])}]
+   [:a {:href (path-for :item {:item-id item-id})} item]])
+
+(defn delete-one [{:keys [id _]}]
+  [:ul
+   [:input {:type "button"
+            :value "delete"
+            :on-click #(rf/dispatch [:delete-one id])}]])
 
 (defn delete-completed []
   [:input {:type "button"
-           :value "clear completed" 
+           :value "clear completed"
            :on-click #(rf/dispatch [:delete-completed])}])
+
+(defn display-task [item-id task]
+  [:ul [todo-chkbx item-id task] [delete-one task]])
 
 (let [tasks (rf/subscribe [:get-tasklist])
       num-tasks (rf/subscribe [:get-numtasks])]
@@ -182,7 +206,7 @@
      [:div
       [:ul (doall (for [[item-id task] (map-indexed list @tasks)]
                     ^{:key item-id}
-                    [todo-chkbx item-id task]))]
+                    [display-task item-id task]))]
       [add-todo]
       [delete-completed]]]))
 

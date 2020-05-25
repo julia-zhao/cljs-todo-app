@@ -26,6 +26,11 @@ WHERE id = :id
 DELETE FROM todos
 WHERE id = :id
 
+-- :name delete-completed-todos! :! :n
+-- :doc deletes all completed user records
+DELETE FROM todos
+WHERE completed = true
+
 -- :name get-todos :? :*
 -- :doc retrieves all todos
 SELECT * FROM todos

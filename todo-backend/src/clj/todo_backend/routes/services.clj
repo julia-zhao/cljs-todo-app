@@ -52,18 +52,33 @@
     {:get (constantly (ok {:message "pong"}))}]
 
    ["/todos"
-    ["" {:get {:handler (fn [_]
-                      (prn (db/get-todos))
-                      {:status 200
-                       :body (db/get-todos)
-                       })}
-     :post {:parameters {:body {:item string? :completed boolean?}}
-            :handler (fn [{{{:keys [item completed]} :body} :parameters}]
-                       (db/create-todo! {:item item :completed completed})
+    [""
+     {:get {:handler (fn [_]
+                       (prn (db/get-todos))
+                       {:status 200
+                        :body (db/get-todos)})}
+      :post {:parameters {:body {:item string? :completed boolean?}}
+             :handler (fn [{{{:keys [item completed]} :body} :parameters}]
+                        (db/create-todo! {:item item :completed completed})
+                        {:status 200
+                         :headers {"content-type" "application/json"}
+                         :body "\"json\""})}
+      :put {:parameters {:body {:id int? :completed boolean?}}
+            :handler (fn [{{{:keys [id completed]} :body} :parameters}]
+                       (db/update-todo-status! {:id id :completed completed})
                        {:status 200
                         :headers {"content-type" "application/json"}
-                        :body "\"json\""})}}]
-    ["/:id"
+                        :body "\"json\""})}
+      :delete {:parameters {:body {:id int?}}
+               :handler (fn [{{{:keys [id]} :body} :parameters}]
+                          (db/delete-todo! {:id id})
+                          {:status 200})}}]
+    ["/all"
+     {:delete {:handler (fn [_]
+                          {:status 200
+                           :body (db/delete-completed-todos!)})}}]
+    
+    ["/id"
      {:get {:parameters {:path {:id int?}}
             :handler (fn [{{{:keys [id]} :path} :parameters}]
                        {:status 200
